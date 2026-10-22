@@ -1,0 +1,8 @@
+streamlit>=1.40,<2
+pandas>=2.2,<4
+requests>=2.32,<3
+python-dotenv>=1.0,<2
+sqlglot>=26,<30
+pytest>=8,<9
+# Only needed when ENABLE_GEMINI_FALLBACK=true:
+google-genai>=1.0,<2
