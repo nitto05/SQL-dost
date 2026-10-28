@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # SQL_dost — Natural-Language to SQL Assistant
 
 SQL_dost accepts plain-English questions about a configured college-records SQLite database, asks a **remote** model to produce structured SQL, validates the SQL, executes only approved read-only queries, and displays results and warnings. It keeps an append-only `failures.md` diagnostic history and retrieves relevant prior notes for subsequent prompts.
@@ -128,6 +128,3 @@ By default, fallback is **disabled** so an unavailable configured model is surfa
 - Remote endpoint authentication is strongly recommended.
 - The tunnel URL is publicly reachable unless protected by the configured API key or other access controls.
 - SQL checks are defense in depth, not a substitute for reviewing the model, schema, and data handling.
-=======
-# SQL-dost
->>>>>>> 5a1b58e0e4d2af989b4ff0ba73fa0cf959b0f645

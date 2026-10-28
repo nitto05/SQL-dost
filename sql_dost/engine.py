@@ -5,6 +5,7 @@ from .schema import get_schema_description
 from .model_client import generate_sql, ModelError
 from .validator import validate_and_execute, SQLValidationError
 from .failure_memory import append_failure, retrieve_failures
+from .query_understanding import understand_query
 
 SYSTEM_RULES = """You are a text-to-SQL generator for a college-records SQLite database.
 Return ONLY a JSON object with fields: sql (string), explanation (string),
@@ -30,8 +31,67 @@ def answer_question(question: str) -> dict:
     if len(question) > settings.max_question_chars:
         raise ValueError(f"Question exceeds {settings.max_question_chars} characters.")
     schema = get_schema_description(settings.database_path)
+
+    understood = understand_query(question, schema)
+
+    if understood["intent"] == "SCHEMA_OVERVIEW":
+        return {
+            "status": "success",
+            "response_type": "schema",
+            "sql": "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name;",
+            "explanation": "These are the tables in the configured database.",
+            "schema": schema,
+            "result": None,
+            "warnings": [],
+        }
+
+    if understood["intent"] == "SCHEMA_DETAILS":
+        return {
+            "status": "success",
+            "response_type": "schema",
+            "sql": "SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name;",
+            "explanation": "Schema details for the configured database.",
+            "schema": schema,
+            "result": None,
+            "warnings": [],
+        }
+
+    if understood["intent"] == "WRITE_REQUEST":
+        return {
+            "status": "rejected",
+            "response_type": "policy",
+            "sql": "",
+            "explanation": "SQL_dost currently supports read-only queries; it cannot insert, update, or delete records.",
+            "schema": None,
+            "result": None,
+            "warnings": [],
+        }
+
+    if understood["intent"] == "UNSUPPORTED_REQUEST":
+        return {
+            "status": "unsupported",
+            "response_type": "message",
+            "sql": "",
+            "explanation": "I can answer questions about the configured database and its records.",
+            "schema": None,
+            "result": None,
+            "warnings": [],
+        }
+
+    if understood["requires_clarification"]:
+        return {
+            "status": "clarification",
+            "question": understood["clarification_question"] or "Could you clarify the database question?",
+            "sql": "",
+            "explanation": understood["normalized_request"],
+            "schema": None,
+            "result": None,
+            "warnings": [],
+        }
+
+    normalized_request = understood["normalized_request"]
     notes = retrieve_failures(question)
-    prompt = build_prompt(question, schema, notes)
+    prompt = build_prompt(normalized_request, schema, notes)
     last_error = None
     last_sql = ""
     for attempt in range(settings.max_repair_attempts + 1):
@@ -50,7 +110,7 @@ def answer_question(question: str) -> dict:
                 warnings.append(f"Results were limited to {settings.max_result_rows} rows.")
             if result["row_count"] == 0:
                 warnings.append("The query returned no rows; this may be correct, or the question/schema may need clarification.")
-            return {"status": "success", "sql": last_sql, "explanation": model_output.get("explanation", ""),
+            return {"status": "success", "response_type": "data", "sql": last_sql, "explanation": model_output.get("explanation", ""),
                     "result": result, "warnings": warnings}
         except (SQLValidationError, ModelError) as exc:
             last_error = exc
@@ -58,7 +118,7 @@ def answer_question(question: str) -> dict:
             append_failure(question, last_sql, category, str(exc), str(exc),
                            verification="Automatically checked" if isinstance(exc, SQLValidationError) else "Unverified")
             if attempt < settings.max_repair_attempts and isinstance(exc, SQLValidationError):
-                prompt = build_prompt(question, schema, notes, str(exc))
+                prompt = build_prompt(normalized_request, schema, notes, str(exc))
                 continue
             raise
     raise last_error or RuntimeError("Request failed unexpectedly.")
