@@ -1,3 +1,5 @@
+#streamlit run app.py
+
 import streamlit as st
 import pandas as pd
 from sql_dost.engine import answer_question
@@ -31,7 +33,20 @@ if st.button("Generate SQL and run safely", type="primary", disabled=not questio
             response = answer_question(question)
             if response["status"] == "clarification":
                 st.info(response["question"])
-                if response.get("explanation"): st.write(response["explanation"])
+                if response.get("explanation"):
+                    st.write(response["explanation"])
+            elif response.get("response_type") == "schema":
+                if response.get("explanation"):
+                    st.write(response["explanation"])
+                if response.get("sql"):
+                    st.subheader("SQL Query")
+                    st.code(response["sql"], language="sql")
+                st.subheader("Database Schema")
+                st.code(response["schema"], language="text")
+            elif response.get("response_type") == "policy" or response.get("status") == "rejected":
+                st.warning(response.get("explanation", "Request rejected by policy."))
+            elif response.get("response_type") == "message" or response.get("status") == "unsupported":
+                st.info(response.get("explanation", "I can answer questions about the configured database and its records."))
             else:
                 st.subheader("Generated SQL")
                 st.code(response["sql"], language="sql")
